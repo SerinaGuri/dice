@@ -1,84 +1,52 @@
 
 <script>
+    import { onMount } from 'svelte';
+
     let number = $state(null);
-    let status = $state('Press Start');
-    let beta = 0;
-    let gamma = 0;
+    let status = $state('Waiting for motion permission...');
+
+    let gx = 0, gy = 0, gz = 0;
     let lastShake = 0;
 
-    async function start() {
-        try {
-            if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                const permission = await DeviceMotionEvent.requestPermission();
-                if (permission !== 'granted') {
-                    status = 'Motion permission denied';
-                    return;
-                }
-            }
+    function roll() {
+        const values = [
+            { axis: 'x', value: gx },
+            { axis: 'y', value: gy },
+            { axis: 'z', value: gz }
+        ].sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
 
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                const permission = await DeviceOrientationEvent.requestPermission();
-                if (permission !== 'granted') {
-                    status = 'Orientation permission denied';
-                    return;
-                }
-            }
+        const { axis, value } = values[0];
 
-            window.addEventListener('deviceorientation', (e) => {
-                beta = e.beta ?? 0;
-                gamma = e.gamma ?? 0;
-            });
-
-            window.addEventListener('devicemotion', (e) => {
-                const a = e.acceleration;
-                if (!a || a.x === null || a.y === null || a.z === null) return;
-
-                const strength = Math.sqrt(
-                    a.x ** 2 + a.y ** 2 + a.z ** 2
-                );
-
-                const now = Date.now();
-
-                if (strength > 15 && now - lastShake > 1000) {
-                    lastShake = now;
-                    roll();
-                }
-            });
-
-            status = 'Ready — shake your iPhone!';
-        } catch (e) {
-            status = e.message;
-        }
+        if (axis === 'z') number = value < 0 ? 1 : 6;
+        else if (axis === 'y') number = value < 0 ? 3 : 4;
+        else number = value < 0 ? 2 : 5;
     }
 
     
-function roll() {
-    // Screen facing up
-    if (beta > -45 && beta < 45 &&
-        gamma > -45 && gamma < 45) {
-        number = 1;
-    }
-    // Screen facing down
-    else if (Math.abs(beta) > 135) {
-        number = 6;
-    }
-    // Earpiece edge up
-    else if (beta >= 45 && beta < 135) {
-        number = 3;
-    }
-    // Earpiece edge down
-    else if (beta <= -45 && beta > -135) {
-        number = 4;
-    }
-    // Side edges: distinguish using gamma
-    else if (gamma >= 0) {
-        number = 2;
-    } else {
-        number = 5;
-    }
-}
+onMount(() => {
+    window.addEventListener('devicemotion', (event) => {
+        const g = event.accelerationIncludingGravity;
+        if (!g || g.x == null || g.y == null || g.z == null) return;
+
+        gx = g.x;
+        gy = g.y;
+        gz = g.z;
+
+        const a = event.acceleration;
+        if (!a || a.x == null || a.y == null || a.z == null) return;
+
+        const strength = Math.hypot(a.x, a.y, a.z);
+        const now = Date.now();
+
+        if (strength > 15 && now - lastShake > 1000) {
+            lastShake = now;
+            roll();
+        }
+    });
+});
 
 </script>
+
 
 <svelte:head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
